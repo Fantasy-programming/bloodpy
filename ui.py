@@ -78,20 +78,6 @@ class BloodBankUI:
         )
         self.donate_donor_menu.grid(row=1, column=1, padx=5, pady=5)
 
-        ctk.CTkLabel(donate_frame, text="Blood Group:", font=("Helvetica", 14)).grid(
-            row=2, column=0, padx=5, pady=5
-        )
-
-        self.donate_bg_entry = ctk.CTkOptionMenu(
-            donate_frame,
-            values=BLOOD_GROUPS,
-            width=300,
-            height=40,
-            font=("Helvetica", 14),
-            state="disabled",  # Blood group will be set based on donor selection
-        )
-        self.donate_bg_entry.grid(row=2, column=1, padx=5, pady=5)
-
         ctk.CTkLabel(donate_frame, text="Units:", font=("Helvetica", 14)).grid(
             row=2, column=0, padx=5, pady=5
         )
@@ -249,7 +235,7 @@ class BloodBankUI:
             messagebox.showerror("Input Error", "Please select a donor.")
             return
 
-        blood_group = self.donate_bg_entry.get()
+        blood_group = self.current_donor["blood_group"]
         try:
             units = int(self.donate_units_entry.get().strip())
         except ValueError:
