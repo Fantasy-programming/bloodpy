@@ -20,6 +20,9 @@ class BloodBankUI:
         self.current_donor = None
         self.donate_donor_menu = None  # Initialize the donor menu reference
 
+        # Set protocol to handle window close events properly
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         self.create_widgets()
         self.populate_treeview()
 
@@ -266,27 +269,28 @@ class BloodBankUI:
         blood_group = self.current_donor["blood_group"]
         try:
             units = int(self.donate_units_entry.get().strip())
+            if units <= 0:
+                messagebox.showerror("Input Error", "Please enter a positive number for units.")
+                return
         except ValueError:
             messagebox.showerror(
                 "Input Error", "Please enter a valid number for units."
             )
             return
 
-        if not blood_group:
-            messagebox.showerror("Input Error", "Please enter a blood group.")
-
-            return
-
-        self.db.add_donation(blood_group, units)
-        self.db.add_transaction(
-            self.current_donor["name"], blood_group, units, "DONATION"
-        )
-        messagebox.showinfo(
-            "Donation", f"Donation recorded for blood group {blood_group}."
-        )
-        self.populate_treeview()
-        self.donate_bg_entry.delete(0, tk.END)
-        self.donate_units_entry.delete(0, tk.END)
+        # Rest of the donation processing
+        try:
+            self.db.add_donation(blood_group, units)
+            self.db.add_transaction(
+                self.current_donor["name"], blood_group, units, "DONATION"
+            )
+            messagebox.showinfo(
+                "Donation", f"Donation of {units} units recorded for blood group {blood_group}."
+            )
+            self.populate_treeview()
+            self.donate_units_entry.delete(0, 'end')
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to record donation: {str(e)}")
 
     def request_dbase(self):
         blood_group = self.request_bg_entry.get()
@@ -313,13 +317,16 @@ class BloodBankUI:
         success, msg = self.db.process_request(blood_group, units)
         if success:
             self.db.add_transaction(requester_name, blood_group, units, "REQUEST")
-        if success:
             messagebox.showinfo("Request", msg)
+            
+            # Clear form fields after successful transaction
+            self.request_name_entry.delete(0, 'end')
+            self.request_units_entry.delete(0, 'end')
+            
+            # Update blood inventory display and available blood groups
+            self.populate_treeview()
         else:
             messagebox.showerror("Request Error", msg)
-        self.populate_treeview()
-        self.request_bg_entry.delete(0, tk.END)
-        self.request_units_entry.delete(0, tk.END)
 
     def open_donor_registration(self):
         reg_win = ctk.CTkToplevel(self.root)
@@ -419,17 +426,25 @@ class BloodBankUI:
             if donor_names:  # If there are donors, set to the first one
                 self.donate_donor_menu.set(donor_names[0])
                 self.on_donor_selected(donor_names[0])
+            else:
+                # Reset current donor if no donors available
+                self.current_donor = None
+                self.donate_units_entry.delete(0, 'end')
 
     def on_donor_selected(self, selection):
         """Handle donor selection from dropdown."""
         if selection != "No donors registered":
-            donor_name = selection.split(" (")[
-                0
-            ]  # Extract name from "Name (Blood Group)"
-            donor = self.db.get_donor_details(donor_name)
-            if donor:
-                self.current_donor = donor
-                self.donate_bg_entry.set(donor["blood_group"])
+            try:
+                donor_name = selection.split(" (")[
+                    0
+                ]  # Extract name from "Name (Blood Group)"
+                donor = self.db.get_donor_details(donor_name)
+                if donor:
+                    self.current_donor = donor
+                    # We don't have donate_bg_entry, it's stored in current_donor instead
+            except Exception as e:
+                print(f"Error selecting donor: {e}")
+                self.current_donor = None
 
     def open_donor_management(self):
         """Open donor management window to view and delete donors"""
@@ -501,7 +516,11 @@ class BloodBankUI:
                 if success:
                     messagebox.showinfo("Success", f"Donor {donor_name} has been deleted")
                     populate_donor_list()  # Refresh the list
-                    self.refresh_donor_list()  # Update the dropdown in main window
+                    try:
+                        self.refresh_donor_list()  # Update the dropdown in main window
+                    except Exception as e:
+                        print(f"Error refreshing donor list: {e}")
+                        messagebox.showinfo("Note", "Donor deleted, but you may need to restart to see changes in the main screen.")
                 else:
                     messagebox.showerror("Error", "Could not delete donor. Please try again.")
         
@@ -530,11 +549,39 @@ class BloodBankUI:
         populate_donor_list()
 
     def logout(self):
+        """Handle logout properly"""
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+            # Cancel any pending 'after' events
+            pending = self.root.tk.call('after', 'info')
+            if pending:
+                for after_id in pending:
+                    self.root.after_cancel(after_id)
+                    
+            # Close database connection
+            self.db.close_connection()
+            
+            # Destroy current window
             self.root.destroy()
+            
+            # Create login window
             login_root = ctk.CTk()
             auth.AdminLogin(login_root)
             login_root.mainloop()
+
+    def on_closing(self):
+        """Handle window closing properly to avoid Tkinter after script errors"""
+        # Properly close the database connection
+        if hasattr(self, 'db'):
+            self.db.close_connection()
+            
+        # Cancel any pending 'after' events
+        pending = self.root.tk.call('after', 'info')
+        if pending:
+            for after_id in pending:
+                self.root.after_cancel(after_id)
+                
+        # Destroy the window
+        self.root.destroy()
 
 
 if __name__ == "__main__":
