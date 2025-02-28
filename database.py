@@ -144,6 +144,33 @@ class Database:
         cursor.close()
         return donor
 
+    def fetch_full_donor_list(self):
+        """Fetch all donors with complete information."""
+        cursor = self.connection.cursor(dictionary=True)
+        sql = "SELECT id, name, blood_group, contact, donation_date FROM Donors ORDER BY name"
+        cursor.execute(sql)
+        donors = cursor.fetchall()
+        cursor.close()
+        return donors
+
+    def delete_donor(self, donor_id):
+        """
+        Delete a donor by ID.
+        This only removes the donor from the Donors table but keeps their donation 
+        history in the BloodTransactions table intact.
+        """
+        try:
+            cursor = self.connection.cursor()
+            sql = "DELETE FROM Donors WHERE id = %s"
+            cursor.execute(sql, (donor_id,))
+            self.connection.commit()
+            affected_rows = cursor.rowcount
+            cursor.close()
+            return affected_rows > 0
+        except Error as e:
+            print(f"Error deleting donor: {e}")
+            return False
+
     def close_connection(self):
         if self.connection.is_connected():
             self.connection.close()

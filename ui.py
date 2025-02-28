@@ -142,9 +142,12 @@ class BloodBankUI:
             row=2, column=0, padx=5, pady=5
         )
 
+        # Get available blood groups (only those with units > 0)
+        available_blood_groups = self.get_available_blood_groups()
+        
         self.request_bg_entry = ctk.CTkOptionMenu(
             request_frame,
-            values=BLOOD_GROUPS,
+            values=available_blood_groups if available_blood_groups else ["No blood available"],
             width=300,
             height=40,
             font=("Helvetica", 14),
@@ -211,6 +214,16 @@ class BloodBankUI:
         )
         donation_history_button.grid(row=0, column=1, padx=5)
 
+        donor_management_button = ctk.CTkButton(
+            control_frame,
+            text="Manage Donors",
+            command=self.open_donor_management,
+            width=200,
+            height=40,
+            font=("Helvetica", 14, "bold"),
+        )
+        donor_management_button.grid(row=0, column=2, padx=5)
+
         logout_button = ctk.CTkButton(
             control_frame,
             text="Logout",
@@ -219,7 +232,16 @@ class BloodBankUI:
             height=40,
             font=("Helvetica", 14, "bold"),
         )
-        logout_button.grid(row=0, column=2, padx=5)
+        logout_button.grid(row=0, column=3, padx=5)
+
+    def get_available_blood_groups(self):
+        """Get blood groups that have available units (> 0)"""
+        records = self.db.fetch_all_blood_records()
+        available_groups = []
+        for record in records:
+            if record["units_available"] > 0:
+                available_groups.append(record["blood_group"])
+        return available_groups
 
     def populate_treeview(self):
         for item in self.tree.get_children():
@@ -229,6 +251,12 @@ class BloodBankUI:
             self.tree.insert(
                 "", tk.END, values=(record["blood_group"], record["units_available"])
             )
+        
+        # Update the request blood group dropdown with available blood groups
+        available_groups = self.get_available_blood_groups()
+        self.request_bg_entry.configure(
+            values=available_groups if available_groups else ["No blood available"]
+        )
 
     def donate_dbase(self):
         if not self.current_donor:
@@ -262,6 +290,9 @@ class BloodBankUI:
 
     def request_dbase(self):
         blood_group = self.request_bg_entry.get()
+        if blood_group == "No blood available":
+            messagebox.showerror("Input Error", "No blood groups are currently available.")
+            return
         try:
             units = int(self.request_units_entry.get().strip())
         except ValueError:
@@ -399,6 +430,104 @@ class BloodBankUI:
             if donor:
                 self.current_donor = donor
                 self.donate_bg_entry.set(donor["blood_group"])
+
+    def open_donor_management(self):
+        """Open donor management window to view and delete donors"""
+        mgmt_win = ctk.CTkToplevel(self.root)
+        mgmt_win.title("Donor Management")
+        mgmt_win.geometry("800x500")
+
+        # Create frame for donor list
+        frame = ctk.CTkFrame(mgmt_win)
+        frame.pack(padx=10, pady=10, fill="both", expand=True)
+
+        # Create Treeview for donor list
+        columns = ("id", "name", "blood_group", "contact", "donation_date")
+        donor_tree = ttk.Treeview(frame, columns=columns, show="headings", height=15)
+        
+        # Define column headings
+        donor_tree.heading("id", text="ID")
+        donor_tree.heading("name", text="Name")
+        donor_tree.heading("blood_group", text="Blood Group")
+        donor_tree.heading("contact", text="Contact")
+        donor_tree.heading("donation_date", text="Last Donation Date")
+        
+        # Define column widths
+        donor_tree.column("id", width=50)
+        donor_tree.column("name", width=200)
+        donor_tree.column("blood_group", width=100)
+        donor_tree.column("contact", width=150)
+        donor_tree.column("donation_date", width=150)
+        
+        donor_tree.pack(side=tk.LEFT, fill="both", expand=True)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=donor_tree.yview)
+        donor_tree.configure(yscroll=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill="y")
+        
+        # Add control buttons
+        btn_frame = ctk.CTkFrame(mgmt_win)
+        btn_frame.pack(pady=10, padx=10, fill="x")
+        
+        # Function to populate donor list
+        def populate_donor_list():
+            for item in donor_tree.get_children():
+                donor_tree.delete(item)
+            
+            donors = self.db.fetch_full_donor_list()
+            for donor in donors:
+                donor_date_str = donor["donation_date"].strftime('%Y-%m-%d') if donor["donation_date"] else "Never"
+                donor_tree.insert("", tk.END, values=(
+                    donor["id"],
+                    donor["name"],
+                    donor["blood_group"],
+                    donor["contact"],
+                    donor_date_str
+                ))
+        
+        # Function to delete selected donor
+        def delete_selected_donor():
+            selected_item = donor_tree.selection()
+            if not selected_item:
+                messagebox.showerror("Error", "Please select a donor to delete")
+                return
+                
+            donor_id = donor_tree.item(selected_item[0])['values'][0]
+            donor_name = donor_tree.item(selected_item[0])['values'][1]
+            
+            if messagebox.askyesno("Delete Donor", f"Are you sure you want to delete donor {donor_name}? This action cannot be undone."):
+                success = self.db.delete_donor(donor_id)
+                if success:
+                    messagebox.showinfo("Success", f"Donor {donor_name} has been deleted")
+                    populate_donor_list()  # Refresh the list
+                    self.refresh_donor_list()  # Update the dropdown in main window
+                else:
+                    messagebox.showerror("Error", "Could not delete donor. Please try again.")
+        
+        # Add buttons
+        delete_btn = ctk.CTkButton(
+            btn_frame,
+            text="Delete Selected Donor",
+            command=delete_selected_donor,
+            width=200,
+            height=40,
+            font=("Helvetica", 14, "bold"),
+        )
+        delete_btn.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        refresh_btn = ctk.CTkButton(
+            btn_frame,
+            text="Refresh List",
+            command=populate_donor_list,
+            width=200,
+            height=40,
+            font=("Helvetica", 14, "bold"),
+        )
+        refresh_btn.pack(side=tk.RIGHT, padx=5, pady=5)
+        
+        # Initially populate the donor list
+        populate_donor_list()
 
     def logout(self):
         if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
