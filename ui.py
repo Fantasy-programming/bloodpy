@@ -15,7 +15,7 @@ class BloodBankUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Blood Bank Management")
-        self.root.geometry("1000x700")
+        self.root.geometry("1600x900")
         self.db = Database()
         self.current_donor = None
         self.donate_donor_menu = None  # Initialize the donor menu reference
@@ -23,8 +23,30 @@ class BloodBankUI:
         # Set protocol to handle window close events properly
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
+        # Configure style for treeview to have larger font
+        self.configure_treeview_style()
+        
         self.create_widgets()
         self.populate_treeview()
+
+    def configure_treeview_style(self):
+        """Configure custom style for treeview with larger font"""
+        # Create a style
+        style = ttk.Style()
+        
+        # Configure the Treeview heading font
+        style.configure("Treeview.Heading", 
+                        font=("Helvetica", 14, "bold"))
+        
+        # Configure the Treeview rows font
+        style.configure("Treeview", 
+                        font=("Helvetica", 13),  # Larger font for data rows
+                        rowheight=25)  # Increase row height to accommodate larger font
+        
+        # Remove the borders
+        style.layout("Treeview", [
+            ('Treeview.treearea', {'sticky': 'nswe'})
+        ])
 
     def create_widgets(self):
         tree_frame = ctk.CTkFrame(self.root)
@@ -32,7 +54,7 @@ class BloodBankUI:
 
         # Table
         self.tree = ttk.Treeview(
-            tree_frame, columns=("blood_group", "units"), show="headings", height=8
+            tree_frame, columns=("blood_group", "units"), show="headings", height=8, style="Treeview"
         )
         self.tree.heading("blood_group", text="Blood Group")
         self.tree.heading("units", text="Units Available")
@@ -76,6 +98,7 @@ class BloodBankUI:
             width=300,
             height=40,
             font=("Helvetica", 14),
+            dropdown_font=("Helvetica", 15),
             variable=self.donate_donor_var,
             command=self.on_donor_selected,
         )
@@ -153,6 +176,7 @@ class BloodBankUI:
             values=available_blood_groups if available_blood_groups else ["No blood available"],
             width=300,
             height=40,
+            dropdown_font=("Helvetica", 15),
             font=("Helvetica", 14),
         )
         self.request_bg_entry.grid(row=2, column=1, padx=5, pady=5)
@@ -329,38 +353,108 @@ class BloodBankUI:
             messagebox.showerror("Request Error", msg)
 
     def open_donor_registration(self):
+        """Open a window to register a new donor with enhanced UI"""
+        # Create window with increased size
         reg_win = ctk.CTkToplevel(self.root)
         reg_win.title("Register Donor")
+        reg_win.geometry("600x400")  # Increased width and proper height
+        
+        # Create a container frame to center the form
+        container_frame = ctk.CTkFrame(reg_win)
+        container_frame.pack(pady=40, padx=50, expand=True)
+        
+        # Title for the registration form
+        title_label = ctk.CTkLabel(
+            container_frame, 
+            text="Register New Donor",
+            font=("Helvetica", 22, "bold")
+        )
+        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20), padx=10)
 
-        label_name = ctk.CTkLabel(reg_win, text="Name:")
-        label_name.grid(row=0, column=0, padx=5, pady=5)
-        name_entry = ctk.CTkEntry(reg_win)
-        name_entry.grid(row=0, column=1, padx=5, pady=5)
+        # Name field with larger font
+        label_name = ctk.CTkLabel(
+            container_frame, 
+            text="Name:",
+            font=("Helvetica", 16)
+        )
+        label_name.grid(row=1, column=0, padx=(10, 20), pady=15, sticky="e")
+        
+        name_entry = ctk.CTkEntry(
+            container_frame,
+            width=300,
+            height=40,
+            font=("Helvetica", 16),
+            placeholder_text="Enter donor name"
+        )
+        name_entry.grid(row=1, column=1, padx=(0, 10), pady=15)
 
-        label_bg = ctk.CTkLabel(reg_win, text="Blood Group:")
-        label_bg.grid(row=1, column=0, padx=5, pady=5)
-        bg_entry = ctk.CTkOptionMenu(reg_win, values=BLOOD_GROUPS)
-        bg_entry.grid(row=1, column=1, padx=5, pady=5)
+        # Blood group field with larger font
+        label_bg = ctk.CTkLabel(
+            container_frame, 
+            text="Blood Group:",
+            font=("Helvetica", 16)
+        )
+        label_bg.grid(row=2, column=0, padx=(10, 20), pady=15, sticky="e")
+        
+        bg_entry = ctk.CTkOptionMenu(
+            container_frame,
+            values=BLOOD_GROUPS,
+            width=300,
+            height=40,
+            font=("Helvetica", 16),
+            dropdown_font=("Helvetica", 16)
+        )
+        bg_entry.grid(row=2, column=1, padx=(0, 10), pady=15)
 
-        label_contact = ctk.CTkLabel(reg_win, text="Contact:")
-        label_contact.grid(row=2, column=0, padx=5, pady=5)
-        contact_entry = ctk.CTkEntry(reg_win)
-        contact_entry.grid(row=2, column=1, padx=5, pady=5)
+        # Contact field with larger font
+        label_contact = ctk.CTkLabel(
+            container_frame, 
+            text="Contact:",
+            font=("Helvetica", 16)
+        )
+        label_contact.grid(row=3, column=0, padx=(10, 20), pady=15, sticky="e")
+        
+        contact_entry = ctk.CTkEntry(
+            container_frame,
+            width=300,
+            height=40,
+            font=("Helvetica", 16),
+            placeholder_text="Enter contact number"
+        )
+        contact_entry.grid(row=3, column=1, padx=(0, 10), pady=15)
 
         def submit_donor():
             name = name_entry.get().strip()
             blood_group = bg_entry.get()
             contact = contact_entry.get().strip()
+            
             if not name or not blood_group or not contact:
                 messagebox.showerror("Input Error", "Please fill in all fields.")
                 return
+                
             self.db.register_donor(name, blood_group, contact, datetime.date.today())
             messagebox.showinfo("Success", "Donor registered successfully.")
             self.refresh_donor_list()  # Update the donor dropdown
             reg_win.destroy()
 
-        submit_button = ctk.CTkButton(reg_win, text="Submit", command=submit_donor)
-        submit_button.grid(row=4, column=0, columnspan=2, pady=10)
+        # Submit button with larger font, centered
+        submit_button = ctk.CTkButton(
+            container_frame, 
+            text="Register Donor",
+            command=submit_donor,
+            width=250,
+            height=50,
+            font=("Helvetica", 16, "bold")
+        )
+        submit_button.grid(row=4, column=0, columnspan=2, pady=25)
+        
+        # Center the window on the screen
+        reg_win.update_idletasks()
+        width = reg_win.winfo_width()
+        height = reg_win.winfo_height()
+        x = (reg_win.winfo_screenwidth() // 2) - (width // 2)
+        y = (reg_win.winfo_screenheight() // 2) - (height // 2)
+        reg_win.geometry(f'{width}x{height}+{x}+{y}')
 
     def open_donation_history(self):
         history_win = ctk.CTkToplevel(self.root)
